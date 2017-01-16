@@ -1,0 +1,168 @@
+---
+title: "Homework 2"
+author: "Ethen Liu, Sai Haran, Sophia Hoffman, Annie Didier, Arindam Bhattacharya"
+date: "1/14/2017"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Homework 2
+
+```{r, message=FALSE, warning=FALSE}
+library(psych)
+library(ggplot2)
+library(data.table)
+setwd('/Users/ethen/Desktop/northwestern/winter/MSIA 421 Data Mining/hw2')
+```
+
+## Question 1
+
+a. Run pca on the data and compute the fraction of variance explained by the first two principal components.
+
+```{r}
+gene <- fread('gene.csv')
+
+# remove the id and the response column prior to fitting pca
+gene_features <- gene[ , c(-1, -ncol(gene)), with = FALSE ]
+pca <- prcomp(gene_features, scale = TRUE)
+var_explained_ratio <- pca$sdev ^ 2 / ncol(gene_features)
+sum(var_explained_ratio[1:2])
+```
+
+b. Generate a scatter plot using the first and second principal component.
+
+```{r, results='hide'}
+gene_pca <- data.table(pca$x[, 1:2])
+gene_pca[ , sick := as.factor(gene$sick) ]
+```
+
+```{r}
+ggplot( gene_pca, aes(PC1, PC2, color = sick) ) +
+geom_point() + theme_bw()
+```
+
+## Question 2
+
+a. Use prcomp to find the principal component analysis, plot a scree plot and comment where the elbow is.
+
+```{r, results='hide'}
+news2 <- fread('news2.csv')
+news2[ , V1 := NULL ]
+pca1 <- prcomp(news2, scale = TRUE)
+```
+
+
+```{r}
+# scree plot of the pca (normalized variance explained ratio), the
+# scale will be different then doing plot(pca1), since it does not
+# normalize the explained variance
+var_explained_ratio <- ( pca1$sdev ^ 2 / ncol(gene_features) )[1:10]
+visualize_screeplot <- function(var_explained_ratio) {
+	var_dt <- data.table(pca = 1:length(var_explained_ratio), 
+						 var = var_explained_ratio)
+	scree_plot <- ggplot( var_dt, aes(pca, var) ) +
+				  geom_bar(stat = 'identity', fill = 'lightblue') +
+				  labs(title = 'Scree Plot', x = 'principal component', 
+				  	   y = 'variance explained ratio') +
+				  theme_bw()
+	return(scree_plot)
+}
+visualize_screeplot(var_explained_ratio)
+```
+
+The elbow of the curve is at the fourth principal component.
+
+b. Use the psych library to perform principal component analysis and interpret the loading vectors (a.k.a rotation, principal components).
+
+```{r}
+
+pca2 <- psych::principal(news2, rotate = 'none', scores = FALSE, nfactor = 3)
+pca2$loadings
+
+```
+The first principal component is simply a mix of all the features, with a much heavier weighting on FOX, effectively separating FOX viewers from non-FOX viewers. For a given channel, the first principal component averages the programs roughly equally. The second principal component contrasts FOX viewers (negative weights) vs. non-FOX viewers (positive weights). The third principal component separates viewers of all 3 channels; CNN viewers will have a large negative score, FOX viewers will be close to zero, and MSNBC viewers will have a large positive score.
+
+## Question 3
+
+
+## Question 4
+
+a. Does x5, Walleye appear to group with the other fish?
+
+```{r}
+# correlation matrix
+R <- matrix(c(
+	1, .4919, .2636, .4653, -.2277, .0652,
+	.4919, 1, .3127, .3506, -.1917, .2045,
+	.2635, .3127, 1, .4108, .0647, .2493,
+	.4653, .3506, .4108, 1, -.2249, .2293,
+	-.2277, -.1917, .0647, -.2249, 1, -.2144,
+	.0652, .2045, .2493, .2293, -.2144, 1
+), byrow = TRUE, ncol = 6)
+R
+
+```
+
+Within the centrarchid family, the pairwise correlations are all positive with magnitude greater than 0.25. However, the correlation scores of Walleye with all the other fish are either negative or very close to zero. Therefore, from a correlation of features perspective, Walleye doesn't seem to group with other types of fish.
+
+b. Perform PCA using only x1-x4 and interpret the first two loading vectors.
+
+```{r}
+eig_decompose <- eigen(R[1:4, 1:4])
+eig_decompose$vectors[, 1:2]
+```
+
+The first loading vector is simply an average of everything. The second loading vector separates x1 = Bluegill and x2 = Black crappie from x3 = Smallmouth bass and x4 = Largemouth bass.
+
+c. Peform PCA on all six variables and generate a scree plot.
+
+```{r}
+
+eig_decompose <- eigen(R)
+plot(eig_decompose$values ~ c(1:6), xlab = 'PC',
+	 ylab = 'Eigenvalues', main = 'Prinicipal Components vs. Eigenvalues')
+lines(eig_decompose$values ~ c(1:6))
+```
+
+d. What fraction of variation accounted for by the first two PCs in part c?
+
+```{r}
+sum(var_explained_ratio[1:2])
+```
+
+e. Interpret the first loading vector from part c.
+
+```{r}
+eig_decompose$vector[, 1]
+```
+
+The first principal component is contrasting Walleye with all the other fish.
+
+## Question 5
+
+a. Compute $X^T X$ and $X X^T$.
+
+```{r}
+X <- matrix(c(1:4, 1, 4, 9, 16), nrow = 4)
+tXX <- t(X) %*% X
+tXX
+XXt <- X %*% t(X)
+XXt
+```
+
+b., c., d. Compute the eigen value, eigen vectors of the two matrices above and comment on the eigen values.
+
+```{r}
+
+eigen(tXX)
+eigen(XXt)
+
+```
+
+The first two eigenvalues are essentially identical, and the last two eigenvalues of the $X X^T$ matrix are very close to zero. This intuitively makes sense, as there are only two variables and thus two directions in which variation can occur. Therefore, we would only expect two non-zero eigenvalues regardless of whether we compute $X X^T$ or $X^T X$.
+
+
+
