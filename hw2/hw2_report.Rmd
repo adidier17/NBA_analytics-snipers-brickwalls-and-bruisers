@@ -85,9 +85,6 @@ pca2$loadings
 ```
 The first principal component is simply a mix of all the features, with a much heavier weighting on FOX, effectively separating FOX viewers from non-FOX viewers. For a given channel, the first principal component averages the programs roughly equally. The second principal component contrasts FOX viewers (negative weights) vs. non-FOX viewers (positive weights). The third principal component separates viewers of all 3 channels; CNN viewers will have a large negative score, FOX viewers will be close to zero, and MSNBC viewers will have a large positive score.
 
-## Question 3
-
-
 ## Question 4
 
 a. Does x5, Walleye appear to group with the other fish?
@@ -164,5 +161,9 @@ eigen(XXt)
 
 The first two eigenvalues are essentially identical, and the last two eigenvalues of the $X X^T$ matrix are very close to zero. This intuitively makes sense, as there are only two variables and thus two directions in which variation can occur. Therefore, we would only expect two non-zero eigenvalues regardless of whether we compute $X X^T$ or $X^T X$.
 
+## Question 3
 
+Proof Question on eigenvalues and eigenvectors.
+
+![proof](q3_proof.png)
 
