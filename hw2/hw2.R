@@ -98,7 +98,7 @@ lines(eig_decompose$values ~ c(1:6))
 
 # d. what fraction of variation accounted for
 # by the first two PCs in part c
-sum(var_explained_ratio[1:2])
+sum( eig_decompose$values[1:2] / sum(eig_decompose$values) )
 
 # e. interpret the first loading vector from part c
 eig_decompose$vector[, 1]

@@ -44,6 +44,8 @@ ggplot( gene_pca, aes(PC1, PC2, color = sick) ) +
 geom_point() + theme_bw()
 ```
 
+There is a clear distinction between sick and non-sick along the 1st Principal Component.
+
 ## Question 2
 
 a. Use prcomp to find the principal component analysis, plot a scree plot and comment where the elbow is.
@@ -127,7 +129,7 @@ lines(eig_decompose$values ~ c(1:6))
 d. What fraction of variation accounted for by the first two PCs in part c?
 
 ```{r}
-sum(var_explained_ratio[1:2])
+sum( eig_decompose$values[1:2] / sum(eig_decompose$values) )
 ```
 
 e. Interpret the first loading vector from part c.
@@ -143,11 +145,13 @@ The first principal component is contrasting Walleye with all the other fish.
 a. Compute $X^T X$ and $X X^T$.
 
 ```{r}
+
 X <- matrix(c(1:4, 1, 4, 9, 16), nrow = 4)
 tXX <- t(X) %*% X
 tXX
 XXt <- X %*% t(X)
 XXt
+
 ```
 
 b., c., d. Compute the eigen value, eigen vectors of the two matrices above and comment on the eigen values.
