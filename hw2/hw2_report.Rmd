@@ -165,9 +165,3 @@ eigen(XXt)
 
 The first two eigenvalues are essentially identical, and the last two eigenvalues of the $X X^T$ matrix are very close to zero. This intuitively makes sense, as there are only two variables and thus two directions in which variation can occur. Therefore, we would only expect two non-zero eigenvalues regardless of whether we compute $X X^T$ or $X^T X$.
 
-## Question 3
-
-Proof Question on eigenvalues and eigenvectors.
-
-![proof](q3_proof.png)
-
