@@ -78,7 +78,7 @@ ssxhat = sum(xhat^2)
 ssxhat
 svd_x$d[1]^2
 ```
-The Frobenius norm, or one dimensional variance, of xhat is the same as the square of the first singular value. 
+The square of the Frobenius norm, or one dimensional variance, of xhat is the same as the square of the first singular value. 
 
 h)
 ```{r}
@@ -87,11 +87,11 @@ SSE
 svd_x$d[2] ^ 2
 ```
 
-It is equal to the square of the k + 1 singular values, where k is the number of the top k singular value we chose to compute the Xhat approximation.
+The answer is equal to the square of the $(k + 1)^{st}$ singular value, where k is the number of the top k singular value we chose to compute the Xhat approximation. In this particular example, it is equal to the square of the second largest singular value, which we set to 0 to obtain the one-dimensional approximation.
 
 i) 
 ```{r}
-energy = svd_x_oned^2/(sum(svd_x$d^2))
+energy = svd_x_oned^2/ (sum(svd_x$d^2))
 energy
 ```
 
