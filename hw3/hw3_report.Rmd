@@ -97,7 +97,7 @@ energy
 
 # Question 2
 
-```{r, results='hide'}
+```{r, message=FALSE, warning=FALSE, results='hide'}
 
 library(data.table)
 setwd("/Users/ethen/Desktop/northwestern/winter/MSIA 421 Data Mining/hw3")
@@ -125,14 +125,14 @@ pca1$sdev
 4 eigenvalues are greater than 1.
 
 ```{r}
-pca1$rotation
+pca1$rotation[, 1]
 ```
 
 noteduc, dislike have smaller first loading vectors when it comes to magnitude.
 
 c)
 
-```{r}
+```{r, results='hide'}
 
 # after removing noteduc and dislike, 
 # the drop of reliability remains the same for
@@ -141,12 +141,15 @@ theater[ , c('dislike', 'noteduc') := NULL ]
 alpha_theater2 <- psych::alpha(theater, check.keys = TRUE)
 alpha_theater2
 
+```
+
+```{r}
 # and the explained ratio of the first loading vector is larger
 pca2 <- prcomp(theater)
 summary(pca1)
 summary(pca2)
-
 ```
+
 
 d)
 
