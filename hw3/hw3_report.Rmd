@@ -76,9 +76,9 @@ g)
 ```{r}
 ssxhat = sum(xhat^2)
 ssxhat
-sum(svd_x$d^2)
+svd_x$d[1]^2
 ```
-The Frobenius norm of xhat is the same as the sum of squares of the singular values. 
+The Frobenius norm, or one dimensional variance, of xhat is the same as the square of the first singular value. 
 
 h)
 ```{r}
