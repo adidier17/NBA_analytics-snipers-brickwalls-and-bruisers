@@ -48,3 +48,11 @@ fit4$loadings
 #factor 1 is sciences
 #factor 2 is arts/humanities
 #factor 3 is hobbies
+
+
+
+
+
+
+
+
