@@ -1,3 +1,4 @@
+library(data.table)
 # problem 3
 box_data <- fread('box2015.csv')
 box_data <- box_data[ MINUTES_PLAYED > 0, ]
@@ -39,6 +40,19 @@ fit_box_data$loadings
 # the fourth one measures a player's point-guardness, the most interesting
 # part is the fact that assists and steals falls in the same category
 # the fifth one measure's a player's turnovers
+fac1<-c("Points_Per_Minute", "Field_Goals_Percentage", "Free_Throws_Percentage", "Three_Point_Percentage")
+fac2<-c("Rebounds_Per_Minute", "Blocks_Per_Minute")
+fac3<-c("Personal_Fouls_Per_Minute", "Disqualifications_Per_Minute")
+fac4<-c("Steals_Per_Minute", "Assists_Per_Minute")
+fac5<-c("Turnovers_Per_Minute")
+NEW_BOX_DATA<-as.data.frame(box_data)
+psych::alpha(NEW_BOX_DATA[,fac1])
+psych::alpha(NEW_BOX_DATA[,fac2])
+psych::alpha(NEW_BOX_DATA[,fac3])
+psych::alpha(NEW_BOX_DATA[,fac4])
+psych::alpha(NEW_BOX_DATA[,fac5])
+
+#----------------------------------------------------------------------------
 
 
 teams <- read.csv('teams.csv')
@@ -49,6 +63,16 @@ box1<-box[which(box$GAME_PLAYED==1),]
 box1<-box[which(box$MINUTES_PLAYED!=0),]
 teamstats <- aggregate(. ~ TEAM, box1, FUN = mean)
 
-remove_cols <- c('GAME_DATE', 'GAME_CODE', 'PLAYER')
+remove_cols <- c('GAME_DATE', 'GAME_CODE', 'PLAYER', 'GAME_PLAYED', 'TEAM', 'FIELD_GOALS_ATT', 'FREE_THROWS_ATT',
+                 'REBOUNDS', 'PLUS_MINUS', 'rank', 'MINUTES_PLAYED', 'THREE_POINT_ATTEMPTS')
+#teamstats<-merge(teamstats,teams,by.x="TEAM",by.y="TEAM")
+teamstats<-teamstats[,!names(teamstats)%in%remove_cols]
 
+screeplot(prcomp(teamstats))
+team_pca<-prcomp(teamstats)
+team_pca$rotation
+summary(team_pca)
+
+team_efa<-factanal(teamstats,factors=3,score="reg",rotation="varimax")
+team_efa$loadings
 
