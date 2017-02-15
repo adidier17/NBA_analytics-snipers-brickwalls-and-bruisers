@@ -1,0 +1,233 @@
+---
+title: "Untitled"
+author: "Annie Didier"
+date: "February 11, 2017"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r}
+#kmeans functions
+summary.kmeans = function(fit) { 
+  p = ncol(fit$centers) 
+  k = nrow(fit$centers) 
+  n = sum(fit$size) 
+  sse = sum(fit$withinss) 
+  xbar = t(fit$centers)%*%fit$size/n 
+  ssb = sum(fit$size*(fit$centers - rep(1,k) %*% t(xbar))^2) 
+  print(data.frame( n=c(fit$size, n), Pct=(round(c(fit$size, n)/n,2)), 
+                    round(rbind(fit$centers, t(xbar)), 2), 
+                    RMSE = round(sqrt(c(fit$withinss/(p*fit$size-1), 
+                                        sse/(p*(n-k)))), 4) )) 
+  cat("SSE = ", sse, "; SSB = ", ssb, "\n") 
+  cat("R-Squared = ", ssb/(ssb+sse), "\n") 
+  cat("Pseudo F = ", (ssb/(k-1))/(sse/(n-k)), "\n\n"); 
+  invisible(list(sse=sse, ssb=ssb, Rsqr=ssb/(ssb+sse), F=(ssb/(k-1))/(sse/(n-k)))) }
+
+plot.kmeans = function(fit,boxplot=F) { 
+  require(lattice) 
+  p = ncol(fit$centers) 
+  k = nrow(fit$centers) 
+  plotdat = data.frame( 
+    mu=as.vector(fit$centers), 
+    clus=factor(rep(1:k, p)), 
+    var=factor( 0:(p*k-1) %/% k, labels=colnames(fit$centers)) 
+    ) 
+  print(dotplot(var~mu|clus, data=plotdat, 
+                panel=function(...){ 
+                  panel.dotplot(...) 
+                  panel.abline(v=0, lwd=.1) 
+                  }, 
+                layout=c(k,1), 
+                xlab="Cluster Mean" 
+       )) 
+  invisible(plotdat) 
+  }
+```
+
+###1
+##k-means
+```{r}
+tradeshow = read.csv("tradeshow.csv") 
+tradeshow_std = scale(tradeshow)
+tradeshow_clust = kmeans(tradeshow_std[,1:3], 3, iter.max = 100, nstart = 3)
+
+summary(tradeshow_clust)
+plot.kmeans(tradeshow_clust)
+```
+There are 3 clusters of size n = 173, 155, and 117 respectively. The first cluster represents the tradeshow enthusiasts; they are there to do it all! The second cluster represents the window shoppers. They aren't interested in networking or education, and their interest in purchasing is pretty low too. These may be the reluctant participants whose bosses forced them to go. The third cluster represents the social networkers. 
+
+##Gaussian mixture, VII
+```{r}
+library(mclust)
+tradeshow_gauss = Mclust(tradeshow_std[,1:3], G = 3, modelNames = "VII")
+summary(tradeshow_gauss)
+tradeshow_gauss$parameters$pro
+tradeshow_gauss$parameters$mean
+```
+a) In the Gaussian mixture model, the first cluster represents the tradeshow enthusiasts, the second the window shoppers, and the third the networkers. The means match pretty closely with those of k-means. In terms of the groupings that exist, both models tell similar stories. The difference lies in how people are assigned to a given category. 
+b) Both models have the fewest observations in the networkers category, but the Gaussian mixture puts the highest number of observations in the window shopper rather than enthusiasts category. Furthermore, the k-means output demonstrates its bias toward equal cluster sizes, whereas the Gaussian mixture is much less evenly distributed. 
+c) 
+```{r}
+(tradeshow_gauss$parameters$variance$sigmasq)^(1/2) #within cluster sd
+```
+
+As expected, the k-means model has fairly equal within cluster variance and the Gaussian mixture with variable volume clusters has different within cluster variance. The tradeshow enthusiasts and window shoppers have a slightly higher within cluster variance in the Gauss than k-means model. However, the networkers have a much higher variance in the Gaussian mixture model. 
+
+d) Since there are no covariance parameters there are 3 estimated variances, one per cluster. 
+
+##Gaussian mixture, algorithm chooses best distribution
+```{r}
+tradeshow_gauss2 = Mclust(tradeshow_std[,1:3], G = 3)
+summary(tradeshow_gauss2)
+tradeshow_gauss2$parameters$mean
+```
+a)
+Again, the first cluster represents the tradeshow enthusiasts, the second the window shoppers, and the third the networkers. The coordinates of each cluster mean are relatively close to those of the previous mixture and the k-means model. 
+b)
+```{r}
+plot(tradeshow_gauss2,2)
+```
+
+c) 
+
+d)
+
+2. 
+```{r}
+#read in the data
+nuoqi = read.csv("nuoqi.csv")
+nuoqi_std = scale(nuoqi[, 1:5])
+```
+a)
+```{r}
+set.seed(12345)
+nuoqi_kmeans = kmeans(nuoqi_std, 5, iter.max = 100)
+
+summary(nuoqi_kmeans)
+plot.kmeans(nuoqi_kmeans)
+```
+
+Cluster 1 is the group of people that are set in their ways and are somewhat indifferent about fashion.  Cluster 2 represents the people who don't really care about fashion at all. Cluster 3 represents the people who are kind of indifferent to style and are willing to shop different brands. Those in cluster 4 have a utilitarian view of clothing. Cluster 5 loves everything about fashion. 
+
+b)
+```{r}
+nuoqi_ips = apply(nuoqi[,1:5], 2, function(x) x-nuoqi$xbar)
+```
+
+c)
+```{r}
+set.seed(12345)
+nuoqi_kmeans2 = kmeans(scale(nuoqi_ips), 5, iter.max = 100)
+summary(nuoqi_kmeans2)
+plot.kmeans(nuoqi_kmeans2)
+```
+There is still some similarity between the non-ipsatized and ipsatized groupings, but ipsatizing the data did make a difference. The first group represents the brand loyalists. Group 2 wants clothes that they find comfortable and functional and doesn't care what other people think. These are our patagonia types. The third group wants to look good and blend in. Group 4 is in it for themselves. They are more interested in making a statement. Group 5 our the fashion lovers. Ipsatizing very clearly distinguishes those that scored differently on cross, so it is easier to see brand loyalty with this method. Furthermore, this method removed some of the purely negative groupings, so we can see that the data has been normalized to account for the negative Nancy's. Finally, we see greater contrast within a group, similar to a varimax rotation in factor analysis. 
+d)
+```{r}
+
+sse = rep(0, 5)
+print("K-means for raw standardized data")
+for(k in 2:6){
+  set.seed(12345)
+  fit = kmeans(nuoqi_std, k, iter.max = 100)
+  print(k)
+  summary(fit)
+  plot.kmeans(fit)
+  sse[k-1] = sum(fit$withinss)
+}
+
+plot(c(2,3,4,5,6), sse)
+```
+Non-ipsatized data:
+The skree plot does not show a clear elbow. We also examined up to 8 clusters to see if the SSE ever leveled off, but it does not. Furthermore, there do not appear any clear spikes in the pseudo-F statistic; it continues to decrease after 2 clusters, but inspection of the clusters shows that 2 is not a good solution. 
+The 2 cluster solution shows a group of people that like fashion and a group that doesn't. This doesn't really provide any useful insight, so this is not a good solution. Similarly, the three cluster solution gives groups that care a lot about fashion, those who are indifferent, and those that really dislike it. The groupings are homogenous across every domain of questions and don't really provide any insights. The four cluster solution is somewhat better. The 6 cluster solution has too many similarities across clusters. 
+
+The utility of the different sized clusters would depend on the needs of Nuoqi, and whether they can handle or treat different groups differently. However, at least 4 groups are needed to give insight into fashion aesthetics and attitudes beyond "I like it", "I don't like  it" and "I don't care". 
+```{r}
+#make a scree plot
+sse = rep(0, 9)
+print("K-means for raw standardized data")
+for(k in 2:10){
+  set.seed(12345)
+  fit = kmeans(nuoqi_std, k, iter.max = 100)
+  sse[k-1] = sum(fit$withinss)
+}
+
+plot(c(2,3,4,5,6,7,8,9,10), sse)
+```
+
+Now we examine different cluster sizes for the ipsatized data. 
+```{r}
+#comparing for ipsatized data
+for(k in 2:6){
+  set.seed(12345)
+  fit = kmeans(scale(nuoqi_ips), k, iter.max = 100)
+  print(k)
+  summary(fit)
+  plot.kmeans(fit)
+  sse[k-1] = sum(fit$withinss)
+}
+
+```
+
+The ipsadized clusters show more variation across the different categories and provide better insights overall. Again, the 2 and 3 cluster solutions do not provide deep insights. In the 4 cluster solution group 1 represents the brand-loyalists, group 2 wants to blend in, group 3 love fashion, group 4 are our patagonia shoppers. The 6 cluster solution makes clusters with too many similarities. The 4 cluster solution provides actionable insight without redundancy. 
+
+```{r}
+#Gaussian mixture model
+set.seed(12345)
+nuoqi_gauss = Mclust(scale(nuoqi_ips), G = 5)
+summary(nuoqi_gauss)
+
+```
+
+```{r}
+plot(nuoqi_gauss, 'classification')
+
+```
+The problem seems to be that there are not clear boundaries between the clusters. There is too much overlap to make distinctions between the different groups, instead the clusters seem to be heirarchical. Furthermore, the cluster represented by the red data is huge, overwhelming the other groupings. 
+
+##3
+```{r}
+# log all variables first
+library(data.table)
+library(ggplot2)
+book <- fread('book.csv')
+book[ , names(book) := lapply(.SD, function(x) log(x + 1)) ]
+
+# using the screeplot to determine
+# the number of factors to keep
+pca_book <- prcomp(book)
+screeplot(pca_book)
+
+# conduct factor analysis and remove the weights that
+# are below 0.3 to make results more interpretable
+factor_book <- psych::principal(book, nfactor = 3, rotate = 'varimax')
+loadings <- factor_book$loadings
+loadings[loadings < 0.3] <- 0
+exclude <- c('fiction1', 'legends6', 'philosophy7', 'facsimile17', 
+'politics22', 'maps30', 'GamesRiddles38', 'sports39', 
+'videos50', 'nonbooks99','cartoons5', 'railroads27')
+book_subset <- book[, -exclude, with = FALSE]
+factor_book <- psych::principal(book_subset, nfactor = 3, rotate = 'varimax')
+rotation <- as.matrix(book_subset) %*% factor_book$loadings
+
+
+n_clusters <- 3:6
+sse <- numeric(length(n_clusters))
+for ( k in seq_along(n_clusters) ) {
+  set.seed(12345)
+fit <- kmeans(rotation, centers = k, iter.max = 100, nstart = 10)
+sse[k] <- sum(fit$withinss)
+}
+
+dt_sse <- data.table(k = n_clusters, sse = sse)
+ggplot( dt_sse, aes(k, sse) ) +
+geom_line() + theme_bw()
+
+
+set.seed(12345)
+cluster <- kmeans(rotation, centers = 5)
+```
