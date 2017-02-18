@@ -76,3 +76,5 @@ eee_sigma <- eee$parameters$variance$sigma
 summary(kmean)
 t(vii$parameters$mean)
 t(eee$parameters$mean)
+
+
