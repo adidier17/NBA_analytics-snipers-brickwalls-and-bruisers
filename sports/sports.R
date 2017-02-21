@@ -105,6 +105,13 @@ plot.kmeans = function(fit,boxplot=F) {
 summary(fit)
 plot(fit)
 
+#cluster 1 is outside shooters
+#cluster 2 is offensive big men/power forwards
+#cluster 3 is shiftiness/agility
+#cluster 4 is defensive big men
+#cluster 5 is hitting your free throws
+#cluster 6 is having a bad game
+
 # 1. put the player names and cluster assignment to each row 
 # 2. aggregate players to each cluster
 # e.g. how many times did each player appear in each cluster
@@ -118,3 +125,19 @@ entropy <- aggregation[ , {
 	list(entropy = entropy)
 }, by = player ][order(-entropy), ]
 
+#remove bad game cluster, lump outside shooters and ft cluster together
+box_data2<-box_data[, player := player]
+box_data2<-box_data[, cluster := fit$cluster]
+box_data2$cluster[which(box_data2$cluster==5)]<-1
+box_data2<-box_data2[-which(box_data2$cluster==6),]
+aggregation2 <- box_data2[ , .(counts = .N), by = .(cluster, player) ]
+entropy2 <- aggregation2[ , {
+  p <- counts / sum(counts)
+  entropy <- -sum( p * log10(p) )
+  list(entropy = entropy)
+}, by = player ][order(-entropy), ]
+#model now shows a more interpretable figure of entropy
+#since our clusters now are purely playstyle focused, we won't get inflated entropy if a player hits
+#free throws or has a bad game
+#the "bad game" cluster is still useful info but for this analysis I don't think we should take into account
+#player consistency
