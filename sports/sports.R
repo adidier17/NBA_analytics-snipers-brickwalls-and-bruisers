@@ -2,27 +2,29 @@ library(ggplot2)
 library(data.table)
 setwd('/Users/ethen/Desktop/northwestern/winter/MSIA 421 Data Mining/sports')
 
-preprocess <- function(box_data) {
+preprocess <- function(box_data, minutes_threshold) {
 	# only consider the data where a player has actually played a game
-	box_data <- box_data[ MINUTES_PLAYED > 0, ]
+	box_data <- box_data[ MINUTES_PLAYED > minutes_threshold, ]
 
 	# extract possibly useful columns that are normalized by minutes
 	box_data[, ('Points_Per_Minute') := TOTAL_POINTS / MINUTES_PLAYED]
 	box_data[, ('Assists_Per_Minute') := ASSISTS / MINUTES_PLAYED]
 	box_data[, ('Rebounds_Per_Minute') := REBOUNDS / MINUTES_PLAYED]
 	box_data[, ('Steals_Per_Minute') := STEALS / MINUTES_PLAYED]
-	box_data[, ('Turnovers_Per_Minute') := TURNOVERS / MINUTES_PLAYED]
-	box_data[, ('Personal_Fouls_Per_Minute') := PERSONAL_FOULS / MINUTES_PLAYED]
 	box_data[, ('Blocks_Per_Minute') := BLOCKED_SHOTS / MINUTES_PLAYED]
-	box_data[, ('Field_Goals_Percentage') := FIELD_GOALS_MADE / FIELD_GOALS_ATT]
-	box_data[, ('Free_Throws_Percentage') := FREE_THROWS_MADE / FREE_THROWS_ATT]
-	box_data[, ('Three_Point_Percentage') := THREE_POINT_MADE / THREE_POINT_ATT]
-	retain_cols <- c('PLAYER',
-					 'Points_Per_Minute', 'Assists_Per_Minute', 
-					 'Rebounds_Per_Minute', 'Steals_Per_Minute', 
-					 'Turnovers_Per_Minute', 'Personal_Fouls_Per_Minute',
-					 'Blocks_Per_Minute', 'Field_Goals_Percentage', 
-					 'Free_Throws_Percentage', 'Three_Point_Percentage')
+	box_data[, ('Two_Points_Att') := FIELD_GOALS_ATT - THREE_POINT_ATT]
+	box_data[, ('Two_Points_Made') := FIELD_GOALS_MADE - THREE_POINT_MADE]
+	
+	# turnovers and personal fouls were not indicative in clusters result,
+	# thus we did not include them;
+	# for the three pointers, two pointers and free throws include the 
+	# raw attempt count and basket made
+	retain_cols <- c('PLAYER', 'Blocks_Per_Minute',
+					 'Points_Per_Minute', 'Assists_Per_Minute',
+					 'Rebounds_Per_Minute', 'Steals_Per_Minute',
+					 'FREE_THROWS_ATT', 'THREE_POINT_ATT',
+					 'FREE_THROWS_MADE', 'THREE_POINT_MADE',
+					 'Two_Points_Made', 'Two_Points_Att')
 	box_data <- box_data[, retain_cols, with = FALSE]
 
 	# replace NAs with 0
@@ -33,7 +35,18 @@ preprocess <- function(box_data) {
 }
 
 box_data <- fread('box2015.csv')
-box_data <- preprocess(box_data)
+
+starters <- box_data[ , .(minutes = sum(MINUTES_PLAYED)), by = .(TEAM, PLAYER) 
+				   ][order(TEAM, -minutes),]
+
+# get the top 7 players from the aggregation table,
+# how many times a certain team has a certain cluster (proportion) over season;
+# correlation between this and the wins
+top_players <- starters[, head(.SD, 7), by = TEAM]
+
+
+minutes_threshold <- 10
+box_data <- preprocess(box_data, minutes_threshold)
 
 # exclude the player information when doing the clustering analysis
 player <- box_data[['PLAYER']]
@@ -105,6 +118,13 @@ plot.kmeans = function(fit,boxplot=F) {
 summary(fit)
 plot(fit)
 
+# 1. facilitator, distributors
+# 2. bad games
+# 3. defensive players
+# 4. three point shooters
+# 5. power forward/centers
+# 6. all stars that's carrying their team !!!!!!
+
 #cluster 1 is outside shooters
 #cluster 2 is offensive big men/power forwards
 #cluster 3 is shiftiness/agility
@@ -118,12 +138,24 @@ plot(fit)
 # 3. compute entropy of each player and sort them in decreasing order
 box_data[, player := player]
 box_data[, cluster := fit$cluster]
-aggregation <- box_data[ , .(counts = .N), by = .(cluster, player) ]
+aggregation <- box_data[, .(counts = .N), by = .(cluster, player)]
+
+# manually checking each cluster to see if they make intuitive sense
+aggregation[cluster == 2, ][order(-counts), ]
+
+
+# extract only the top players
+top_aggregation <- aggregation[ player %in% top_players[['PLAYER']], ]
+top_top <- merge(top_aggregation, top_players, by.x = 'player', by.y = 'PLAYER')
+
+
+
 entropy <- aggregation[ , {
 	p <- counts / sum(counts)
 	entropy <- -sum( p * log10(p) )
 	list(entropy = entropy)
 }, by = player ][order(-entropy), ]
+
 
 #remove bad game cluster, lump outside shooters and ft cluster together
 box_data2<-box_data[, player := player]
