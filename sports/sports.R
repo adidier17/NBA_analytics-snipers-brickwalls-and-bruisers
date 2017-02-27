@@ -1,12 +1,27 @@
 library(ggplot2)
 library(data.table)
 setwd('/Users/ethen/Desktop/northwestern/winter/MSIA 421 Data Mining/sports')
+box_data <- fread('box2015.csv')
+
+# --------------------------------------------------------------------------------------
+# preprocessing
+
+# get the top 7 players (sorted by minutes played) from each team
+starters <- box_data[, .(minutes = sum(MINUTES_PLAYED)), by = .(TEAM, PLAYER) 
+				   ][order(TEAM, -minutes),]
+top_players <- starters[, head(.SD, 7), by = TEAM]
 
 preprocess <- function(box_data, minutes_threshold) {
-	# only consider the data where a player has actually played a game
-	box_data <- box_data[ MINUTES_PLAYED > minutes_threshold, ]
+	# only consider the data where a player has played
+	# above a certain number of minutes
+	box_data <- box_data[MINUTES_PLAYED > minutes_threshold,]
 
-	# extract possibly useful columns that are normalized by minutes
+	# extract possibly useful columns that are normalized by minutes.
+	# turnovers and personal fouls were not indicative in clusters result,
+	# thus we did not include them;
+	# for the three pointers, two pointers and free throws include the 
+	# raw attempt count and basket made instead of turning them into
+	# percentages (when turned into percentages, the cluster result was sub-optimal)
 	box_data[, ('Points_Per_Minute') := TOTAL_POINTS / MINUTES_PLAYED]
 	box_data[, ('Assists_Per_Minute') := ASSISTS / MINUTES_PLAYED]
 	box_data[, ('Rebounds_Per_Minute') := REBOUNDS / MINUTES_PLAYED]
@@ -14,11 +29,6 @@ preprocess <- function(box_data, minutes_threshold) {
 	box_data[, ('Blocks_Per_Minute') := BLOCKED_SHOTS / MINUTES_PLAYED]
 	box_data[, ('Two_Points_Att') := FIELD_GOALS_ATT - THREE_POINT_ATT]
 	box_data[, ('Two_Points_Made') := FIELD_GOALS_MADE - THREE_POINT_MADE]
-	
-	# turnovers and personal fouls were not indicative in clusters result,
-	# thus we did not include them;
-	# for the three pointers, two pointers and free throws include the 
-	# raw attempt count and basket made
 	retain_cols <- c('PLAYER', 'Blocks_Per_Minute',
 					 'Points_Per_Minute', 'Assists_Per_Minute',
 					 'Rebounds_Per_Minute', 'Steals_Per_Minute',
@@ -33,26 +43,19 @@ preprocess <- function(box_data, minutes_threshold) {
 	}
 	return(box_data)
 }
-
-box_data <- fread('box2015.csv')
-
-starters <- box_data[ , .(minutes = sum(MINUTES_PLAYED)), by = .(TEAM, PLAYER) 
-				   ][order(TEAM, -minutes),]
-
-# get the top 7 players from the aggregation table,
-# how many times a certain team has a certain cluster (proportion) over season;
-# correlation between this and the wins
-top_players <- starters[, head(.SD, 7), by = TEAM]
-
-
 minutes_threshold <- 10
 box_data <- preprocess(box_data, minutes_threshold)
 
+
+# --------------------------------------------------------------------------------------
+# clustering (kmeans)
+
 # exclude the player information when doing the clustering analysis
 player <- box_data[['PLAYER']]
-box_data[ , PLAYER := NULL ]
+box_data[, PLAYER := NULL]
 
 # set parameters for kmeans
+seed <- 12345
 n_start <- 10
 iter_max <- 100
 n_clusters <- 3:8
@@ -61,20 +64,21 @@ sse <- numeric(length(n_clusters))
 # standardize the data, and use the elbow method to find the optimal number for k
 box_data_scaled <- scale(box_data)
 for ( k in seq_along(n_clusters) ) {
-	set.seed(12345)
-	fit <- kmeans(box_data_scaled, centers = k, iter.max = iter_max, nstart = n_start)
+	set.seed(seed)
+	centers <- n_clusters[k]
+	fit <- kmeans(box_data_scaled, centers = centers, iter.max = iter_max, nstart = n_start)
 	sse[k] <- sum(fit$withinss)
 }
 dt_sse <- data.table(k = n_clusters, sse = sse)
 ggplot( dt_sse, aes(k, sse) ) +
 geom_line() + theme_bw()
 
-# we decided to use 6 clusters, not because there is a clear elbow, but
-# because the interpretation made more sense
-set.seed(12345)
+# we decided to use 6 clusters, not because there is a clear elbow,
+# but because the interpretation made more sense
+set.seed(seed)
 fit <- kmeans(box_data_scaled, centers = 6, iter.max = iter_max, nstart = n_start)
 
-
+# some helper functions to interpret the cluster results
 summary.kmeans = function(fit) {
 	p = ncol(fit$centers)
 	k = nrow(fit$centers)
@@ -83,8 +87,8 @@ summary.kmeans = function(fit) {
 	xbar = t(fit$centers)%*%fit$size/n
 	ssb = sum(fit$size*(fit$centers - rep(1,k) %*% t(xbar))^2) 
 	print(data.frame(
-		n=c(fit$size, n),
-		Pct=(round(c(fit$size, n)/n,2)),
+		n = c(fit$size, n),
+		Pct = (round(c(fit$size, n)/n,2)),
 		round(rbind(fit$centers, t(xbar)), 2),
 		RMSE = round(sqrt(c(fit$withinss/(p*fit$size-1), sse/(p*(n-k)))), 4)
 	))
@@ -100,24 +104,24 @@ plot.kmeans = function(fit,boxplot=F) {
 	p = ncol(fit$centers) 
 	k = nrow(fit$centers) 
 	plotdat = data.frame( 
-		mu=as.vector(fit$centers), 
-		clus=factor(rep(1:k, p)), 
-		var=factor( 0:(p*k-1) %/% k, labels=colnames(fit$centers)) 
+		mu = as.vector(fit$centers), 
+		clus = factor(rep(1:k, p)), 
+		var = factor( 0:(p*k-1) %/% k, labels=colnames(fit$centers)) 
 	) 
 	print(dotplot(var~mu|clus, data=plotdat, 
-		panel=function(...){ 
+		panel = function(...){ 
 			panel.dotplot(...) 
 			panel.abline(v=0, lwd=.1) 
 		}, 
-		layout=c(k,1), 
-		xlab="Cluster Mean" 
+		layout = c(k,1), 
+		xlab = "Cluster Mean" 
 	))
 	invisible(plotdat) 
 }
 
 summary(fit)
 plot(fit)
-
+# cluster interpretation
 # 1. facilitator, distributors
 # 2. bad games
 # 3. defensive players
@@ -125,12 +129,9 @@ plot(fit)
 # 5. power forward/centers
 # 6. all stars that's carrying their team !!!!!!
 
-#cluster 1 is outside shooters
-#cluster 2 is offensive big men/power forwards
-#cluster 3 is shiftiness/agility
-#cluster 4 is defensive big men
-#cluster 5 is hitting your free throws
-#cluster 6 is having a bad game
+
+# --------------------------------------------------------------------------------------
+# analysis (entropy)
 
 # 1. put the player names and cluster assignment to each row 
 # 2. aggregate players to each cluster
@@ -143,18 +144,28 @@ aggregation <- box_data[, .(counts = .N), by = .(cluster, player)]
 # manually checking each cluster to see if they make intuitive sense
 aggregation[cluster == 2, ][order(-counts), ]
 
-
-# extract only the top players
-top_aggregation <- aggregation[ player %in% top_players[['PLAYER']], ]
-top_top <- merge(top_aggregation, top_players, by.x = 'player', by.y = 'PLAYER')
-
-
-
-entropy <- aggregation[ , {
+entropy <- aggregation[, {
 	p <- counts / sum(counts)
 	entropy <- -sum( p * log10(p) )
 	list(entropy = entropy)
-}, by = player ][order(-entropy), ]
+}, by = player][order(-entropy), ]
+
+
+# how many times a certain team has a certain cluster (proportion) over season;
+# correlation between this and the team's number of wins
+
+# only use the top players to evaluate a team's cluster proportion
+aggregation_subset <- aggregation[player %in% top_players[['PLAYER']],]
+top_players_aggregation <- merge(aggregation_subset, top_players, 
+								 by.x = 'player', by.y = 'PLAYER')
+team_cluster <- top_players_aggregation[, .( counts = sum(counts) ), by = .(cluster, TEAM)]
+
+# ?? normalize the cluster count 
+team_cluster_wide <- dcast(team_cluster, TEAM ~ cluster, value.var = 'counts')
+normalizer <- rowSums(team_cluster_wide[, -'TEAM', with = FALSE])
+team_cluster_wide[, c( .(TEAM = TEAM), lapply(.SD, function(x) { 
+	x / normalizer 
+}) ), .SDcols = 2:ncol(team_cluster_wide)]
 
 
 #remove bad game cluster, lump outside shooters and ft cluster together
