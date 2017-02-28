@@ -163,9 +163,84 @@ team_cluster <- top_players_aggregation[, .( counts = sum(counts) ), by = .(clus
 # ?? normalize the cluster count 
 team_cluster_wide <- dcast(team_cluster, TEAM ~ cluster, value.var = 'counts')
 normalizer <- rowSums(team_cluster_wide[, -'TEAM', with = FALSE])
-team_cluster_wide[, c( .(TEAM = TEAM), lapply(.SD, function(x) { 
+normalized <- team_cluster_wide[, c( .(TEAM = TEAM), lapply(.SD, function(x) { 
 	x / normalizer 
 }) ), .SDcols = 2:ncol(team_cluster_wide)]
+
+normalized
+
+
+
+# nearest players for each players, sai like it a lot !!!!!!!!!!!!!!!!!!
+
+
+# -----------------------------------------------------------------------------
+
+# team starting lineups' representation in each cluster across seasons 2015
+team_wins <- fread('teamwins.csv')
+exclude <- c('Losses', 'W/L%')
+team_wins[ , (exclude) := NULL ]
+merged <- merge(team_wins, normalized, by.x = 'Team', by.y = 'TEAM')
+
+library(caret)
+exclude <- c('Team', 'Wins')
+teams <- merged[['Team']]
+wins <- merged[['Wins']]
+merged <- merged[, -exclude, with = FALSE]
+standardize <- preProcess(merged, method = c('center', 'scale'))
+merged_scaled <- predict(standardize, merged)
+# merged_scaled[, 6 := NULL]
+# 
+# merged_scaled[order(-wins), ]
+merged_scaled
+
+
+for ( k in seq_along(n_clusters) ) {
+	set.seed(seed)
+	centers <- n_clusters[k]
+	fit <- kmeans(merged_scaled, centers = centers, iter.max = iter_max, nstart = n_start)
+	sse[k] <- sum(fit$withinss)
+}
+dt_sse <- data.table(k = n_clusters, sse = sse)
+ggplot( dt_sse, aes(k, sse) ) +
+geom_line() + theme_bw()
+
+# we decided to use 6 clusters, not because there is a clear elbow,
+# but because the interpretation made more sense
+set.seed(seed)
+fit <- kmeans(merged_scaled, centers = 3, iter.max = iter_max, nstart = n_start)
+summary(fit)
+plot(fit)
+
+merged_scaled[, centers := fit$cluster]
+merged_scaled[, teams := teams]
+
+merged_scaled[centers == 1, ]
+merged_scaled[centers == 2, ]
+merged_scaled[centers == 3, ]
+
+# legendary + shitty; top-heavy
+merged_scaled[centers == 4, ]
+
+# shitty ....................
+merged_scaled[centers == 3, ]
+
+merged_scaled[centers == 2, ]
+
+merged_scaled[centers == 1, ]
+
+# ideas worth trying:
+# max, mean, standard deviation, min per cluster
+merged_scaled[, wins := wins]
+
+
+quantile(merged_scaled[centers == 1, ]$wins)
+quantile(merged_scaled[centers == 2, ]$wins)
+quantile(merged_scaled[centers == 3, ]$wins)
+# when doing team aggregation, instead of doing the player's play-style
+# look at the mode
+
+
 
 
 #remove bad game cluster, lump outside shooters and ft cluster together
