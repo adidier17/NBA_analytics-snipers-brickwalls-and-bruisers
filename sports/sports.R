@@ -1,3 +1,4 @@
+library(caret)
 library(ggplot2)
 library(data.table)
 setwd('/Users/ethen/Desktop/northwestern/winter/MSIA 421 Data Mining/sports')
@@ -29,12 +30,19 @@ preprocess <- function(box_data, minutes_threshold) {
 	box_data[, ('Blocks_Per_Minute') := BLOCKED_SHOTS / MINUTES_PLAYED]
 	box_data[, ('Two_Points_Att') := FIELD_GOALS_ATT - THREE_POINT_ATT]
 	box_data[, ('Two_Points_Made') := FIELD_GOALS_MADE - THREE_POINT_MADE]
-	retain_cols <- c('PLAYER', 'Blocks_Per_Minute',
+
+	# change names to be snake case instead of the all caps
+	old_names <- c('PLAYER', 'FREE_THROWS_ATT', 'THREE_POINT_ATT', 
+				   'FREE_THROWS_MADE', 'THREE_POINT_MADE')
+	new_names <- c('Player', 'Free_Throw_Att', 'Three_Point_Att', 
+				   'Free_Throw_Made', 'Three_Point_Made')
+	setnames(box_data, old_names, new_names)
+	
+	# all the features that will be in the dataset
+	retain_cols <- c('Blocks_Per_Minute',
 					 'Points_Per_Minute', 'Assists_Per_Minute',
 					 'Rebounds_Per_Minute', 'Steals_Per_Minute',
-					 'FREE_THROWS_ATT', 'THREE_POINT_ATT',
-					 'FREE_THROWS_MADE', 'THREE_POINT_MADE',
-					 'Two_Points_Made', 'Two_Points_Att')
+					 'Two_Points_Made', 'Two_Points_Att', new_names)
 	box_data <- box_data[, retain_cols, with = FALSE]
 
 	# replace NAs with 0
@@ -50,28 +58,31 @@ box_data <- preprocess(box_data, minutes_threshold)
 # --------------------------------------------------------------------------------------
 # clustering (kmeans)
 
-# exclude the player information when doing the clustering analysis
-player <- box_data[['PLAYER']]
-box_data[, PLAYER := NULL]
+# exclude the player information and standardize the data
+# prior to performing cluster
+player <- box_data[['Player']]
+box_data[, Player := NULL]
+standardize <- preProcess(box_data, method = c('center', 'scale'))
+box_data_scaled <- predict(standardize, box_data)
 
 # set parameters for kmeans
 seed <- 12345
 n_start <- 10
 iter_max <- 100
-n_clusters <- 3:8
-sse <- numeric(length(n_clusters))
 
-# standardize the data, and use the elbow method to find the optimal number for k
-box_data_scaled <- scale(box_data)
-for ( k in seq_along(n_clusters) ) {
-	set.seed(seed)
-	centers <- n_clusters[k]
-	fit <- kmeans(box_data_scaled, centers = centers, iter.max = iter_max, nstart = n_start)
-	sse[k] <- sum(fit$withinss)
-}
-dt_sse <- data.table(k = n_clusters, sse = sse)
-ggplot( dt_sse, aes(k, sse) ) +
-geom_line() + theme_bw()
+# use the elbow method to find the optimal number for k
+# n_clusters <- 3:8
+# sse <- numeric(length(n_clusters))
+# for ( k in seq_along(n_clusters) ) {
+# 	set.seed(seed)
+# 	centers <- n_clusters[k]
+# 	fit <- kmeans(box_data_scaled, centers = centers, 
+# 				  iter.max = iter_max, nstart = n_start)
+# 	sse[k] <- sum(fit$withinss)
+# }
+# dt_sse <- data.table(k = n_clusters, sse = sse)
+# ggplot( dt_sse, aes(k, sse) ) +
+# geom_line() + theme_bw()
 
 # we decided to use 6 clusters, not because there is a clear elbow,
 # but because the interpretation made more sense
@@ -79,24 +90,25 @@ set.seed(seed)
 fit <- kmeans(box_data_scaled, centers = 6, iter.max = iter_max, nstart = n_start)
 
 # some helper functions to interpret the cluster results
-summary.kmeans = function(fit) {
-	p = ncol(fit$centers)
-	k = nrow(fit$centers)
-	n = sum(fit$size)
-	sse = sum(fit$withinss)
-	xbar = t(fit$centers)%*%fit$size/n
-	ssb = sum(fit$size*(fit$centers - rep(1,k) %*% t(xbar))^2) 
-	print(data.frame(
-		n = c(fit$size, n),
-		Pct = (round(c(fit$size, n)/n,2)),
-		round(rbind(fit$centers, t(xbar)), 2),
-		RMSE = round(sqrt(c(fit$withinss/(p*fit$size-1), sse/(p*(n-k)))), 4)
-	))
-	cat("SSE = ", sse, "; SSB = ", ssb, "\n")
-	cat("R-Squared = ", ssb/(ssb+sse), "\n")
-	cat("Pseudo F = ", (ssb/(k-1))/(sse/(n-k)), "\n\n");
-	invisible(list(sse=sse, ssb=ssb, Rsqr=ssb/(ssb+sse), F=(ssb/(k-1))/(sse/(n-k))))
-}
+# summary.kmeans = function(fit) {
+# 	p = ncol(fit$centers)
+# 	k = nrow(fit$centers)
+# 	n = sum(fit$size)
+# 	sse = sum(fit$withinss)
+# 	xbar = t(fit$centers)%*%fit$size/n
+# 	ssb = sum(fit$size*(fit$centers - rep(1,k) %*% t(xbar))^2) 
+# 	print(data.frame(
+# 		n = c(fit$size, n),
+# 		Pct = (round(c(fit$size, n)/n,2)),
+# 		round(rbind(fit$centers, t(xbar)), 2),
+# 		RMSE = round(sqrt(c(fit$withinss/(p*fit$size-1), sse/(p*(n-k)))), 4)
+# 	))
+# 	cat("SSE = ", sse, "; SSB = ", ssb, "\n")
+# 	cat("R-Squared = ", ssb/(ssb+sse), "\n")
+# 	cat("Pseudo F = ", (ssb/(k-1))/(sse/(n-k)), "\n\n");
+# 	invisible(list(sse=sse, ssb=ssb, Rsqr=ssb/(ssb+sse), F=(ssb/(k-1))/(sse/(n-k))))
+# }
+# summary(fit)
 
 
 plot.kmeans = function(fit,boxplot=F) { 
@@ -118,8 +130,6 @@ plot.kmeans = function(fit,boxplot=F) {
 	))
 	invisible(plotdat) 
 }
-
-summary(fit)
 plot(fit)
 # cluster interpretation
 # 1. facilitator, distributors
@@ -131,24 +141,78 @@ plot(fit)
 
 
 # --------------------------------------------------------------------------------------
+# players recommendation
+# nearest players for each players, sai like it a lot !!!!!!!!!!!!!!!!!!
+
+# aggregate player performance, note that aggregating by
+# mean or median gives different result
+box_data_scaled[, player := player]
+aggregated_mean <- box_data_scaled[, lapply(.SD, mean), by = player]
+
+player <- aggregated_performance[['player']]
+aggregated_performance[, player := NULL]
+X <- as.matrix(aggregated_performance)
+X_normed <- X / rowSums(X)
+
+library(FNN)
+knn_result <- FNN::get.knn(X_normed, k = 10)
+
+query <- which(player == 'Stephen Curry')
+neighbors_index <- knn_result$nn.index[query, ]
+player[neighbors_index]
+
+query <- which(player == 'Klay Thompson')
+neighbors_index <- knn_result$nn.index[query, ]
+player[neighbors_index]
+
+
+# --------------------------------------------------------------------------------------
 # analysis (entropy)
 
-# 1. put the player names and cluster assignment to each row 
-# 2. aggregate players to each cluster
-# e.g. how many times did each player appear in each cluster
-# 3. compute entropy of each player and sort them in decreasing order
-box_data[, player := player]
-box_data[, cluster := fit$cluster]
-aggregation <- box_data[, .(counts = .N), by = .(cluster, player)]
+# put the player names and cluster assignment to each row 
+# aggregate players to each cluster
+# i.e. how many times did each player appear in each cluster
+box_data_scaled[, player := player]
+box_data_scaled[, cluster := fit$cluster]
+aggregation <- box_data_scaled[, .(counts = .N), by = .(cluster, player)]
+
+
+player_cluster_wide <- dcast(aggregation, player ~ cluster, 
+							 value.var = 'counts', fill = 0)
+normalizer <- rowSums(player_cluster_wide[, -'player', with = FALSE])
+normalized <- player_cluster_wide[, c( .(player = player), lapply(.SD, function(x) { 
+	x / normalizer 
+}) ), .SDcols = 2:ncol(player_cluster_wide)]
+
+
+player <- player_cluster_wide[['player']]
+player_cluster_wide[, player := NULL]
+standardize <- preProcess(player_cluster_wide, method = c('center', 'scale'))
+player_cluster_wide_scaled <- predict(standardize, player_cluster_wide)
+
+
+
+library(FNN)
+knn_result <- FNN::get.knn(player_cluster_wide_scaled, k = 10)
+
+query <- which(player == 'Stephen Curry')
+neighbors_index <- knn_result$nn.index[query, ]
+player[neighbors_index]
+
+query <- which(player == 'Klay Thompson')
+neighbors_index <- knn_result$nn.index[query, ]
+player[neighbors_index]
 
 # manually checking each cluster to see if they make intuitive sense
-aggregation[cluster == 2, ][order(-counts), ]
+# aggregation[cluster == 2, ][order(-counts), ]
 
-entropy <- aggregation[, {
-	p <- counts / sum(counts)
-	entropy <- -sum( p * log10(p) )
-	list(entropy = entropy)
-}, by = player][order(-entropy), ]
+# compute entropy of each player and sort them in decreasing order
+# to look at the play-style variety
+# entropy <- aggregation[, {
+# 	p <- counts / sum(counts)
+# 	entropy <- -sum( p * log10(p) )
+# 	list(entropy = entropy)
+# }, by = player][order(-entropy), ]
 
 
 # how many times a certain team has a certain cluster (proportion) over season;
@@ -168,10 +232,6 @@ normalized <- team_cluster_wide[, c( .(TEAM = TEAM), lapply(.SD, function(x) {
 }) ), .SDcols = 2:ncol(team_cluster_wide)]
 
 normalized
-
-
-
-# nearest players for each players, sai like it a lot !!!!!!!!!!!!!!!!!!
 
 
 # -----------------------------------------------------------------------------
