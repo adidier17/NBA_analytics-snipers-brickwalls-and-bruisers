@@ -136,7 +136,7 @@ plot(fit)
 
 
 # --------------------------------------------------------------------------------------
-# analysis (entropy)
+# analysis
 
 # put the player names and cluster assignment to each row 
 # aggregate players to each cluster
