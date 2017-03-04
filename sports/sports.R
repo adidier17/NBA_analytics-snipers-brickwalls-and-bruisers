@@ -1,3 +1,4 @@
+library(lsa)
 library(caret)
 library(ggplot2)
 library(data.table)
@@ -6,12 +7,6 @@ box_data <- fread('box2015.csv')
 
 # --------------------------------------------------------------------------------------
 # preprocessing
-
-# get the top 7 players (sorted by minutes played) from each team
-starters <- box_data[, .(minutes = sum(MINUTES_PLAYED)), by = .(TEAM, PLAYER) 
-				   ][order(TEAM, -minutes),]
-top_players <- starters[, head(.SD, 7), by = TEAM]
-
 preprocess <- function(box_data, minutes_threshold) {
 	# only consider the data where a player has played
 	# above a certain number of minutes
@@ -141,32 +136,6 @@ plot(fit)
 
 
 # --------------------------------------------------------------------------------------
-# players recommendation
-# nearest players for each players, sai like it a lot !!!!!!!!!!!!!!!!!!
-
-# aggregate player performance, note that aggregating by
-# mean or median gives different result
-box_data_scaled[, player := player]
-aggregated_mean <- box_data_scaled[, lapply(.SD, mean), by = player]
-
-player <- aggregated_performance[['player']]
-aggregated_performance[, player := NULL]
-X <- as.matrix(aggregated_performance)
-X_normed <- X / rowSums(X)
-
-library(FNN)
-knn_result <- FNN::get.knn(X_normed, k = 10)
-
-query <- which(player == 'Stephen Curry')
-neighbors_index <- knn_result$nn.index[query, ]
-player[neighbors_index]
-
-query <- which(player == 'Klay Thompson')
-neighbors_index <- knn_result$nn.index[query, ]
-player[neighbors_index]
-
-
-# --------------------------------------------------------------------------------------
 # analysis (entropy)
 
 # put the player names and cluster assignment to each row 
@@ -176,32 +145,58 @@ box_data_scaled[, player := player]
 box_data_scaled[, cluster := fit$cluster]
 aggregation <- box_data_scaled[, .(counts = .N), by = .(cluster, player)]
 
+# convert to wide format
+player_cluster <- dcast(aggregation, player ~ cluster, 
+						value.var = 'counts', fill = 0)
+player <- player_cluster[['player']]
+player_cluster[, player := NULL]
 
-player_cluster_wide <- dcast(aggregation, player ~ cluster, 
-							 value.var = 'counts', fill = 0)
-normalizer <- rowSums(player_cluster_wide[, -'player', with = FALSE])
-normalized <- player_cluster_wide[, c( .(player = player), lapply(.SD, function(x) { 
-	x / normalizer 
-}) ), .SDcols = 2:ncol(player_cluster_wide)]
+# normalized & standardize
+normalized <- as.matrix(player_cluster) / rowSums(player_cluster)
+standardize <- preProcess(normalized, method = c('center', 'scale'))
+normalized_scaled <- predict(standardize, normalized)
 
+# compute pairwise cosine distance
+distance <- lsa::cosine(t(normalized_scaled))
 
-player <- player_cluster_wide[['player']]
-player_cluster_wide[, player := NULL]
-standardize <- preProcess(player_cluster_wide, method = c('center', 'scale'))
-player_cluster_wide_scaled <- predict(standardize, player_cluster_wide)
+compute_score <- function(distance, query) {
+	# convert the cosine distance to a single score
 
+	# convert from cosine distance to angle 
+	# (acos gives the radian .........................)
+	cosine_distance <- acos(distance[query, ]) * 180 / pi
 
+	# normalize the score from the range of 0 ~ 180 to 100
+	score <- ( (180 - cosine_distance) / 180 ) * 100
+	dt_score <- data.table(score = score, player = player)
+	dt_score <- dt_score[order(-score),]
+	return(dt_score)
+}
 
-library(FNN)
-knn_result <- FNN::get.knn(player_cluster_wide_scaled, k = 10)
-
+# make a comparison to similar players
 query <- which(player == 'Stephen Curry')
-neighbors_index <- knn_result$nn.index[query, ]
-player[neighbors_index]
+compute_score(distance, query)
 
-query <- which(player == 'Klay Thompson')
-neighbors_index <- knn_result$nn.index[query, ]
-player[neighbors_index]
+query <- which(player == 'DeAndre Jordan')
+compute_score(distance, query)
+
+query <- which(player == 'LeBron James')
+compute_score(distance, query)
+
+query <- which(player == 'Kevin Durant')
+compute_score(distance, query)
+
+query <- which(player == 'Dirk Nowitzki')
+compute_score(distance, query)
+
+
+# --------------------------------------------------------------------------------------
+# get the top 7 players (sorted by minutes played) from each team
+box_data <- fread('box2015.csv')
+starters <- box_data[, .(minutes = sum(MINUTES_PLAYED)), by = .(TEAM, PLAYER) 
+				   ][order(TEAM, -minutes),]
+top_players <- starters[, head(.SD, 7), by = TEAM]
+
 
 # manually checking each cluster to see if they make intuitive sense
 # aggregation[cluster == 2, ][order(-counts), ]
@@ -219,6 +214,12 @@ player[neighbors_index]
 # correlation between this and the team's number of wins
 
 # only use the top players to evaluate a team's cluster proportion
+# put the player names and cluster assignment to each row 
+# aggregate players to each cluster
+# i.e. how many times did each player appear in each cluster
+box_data_scaled[, player := player]
+box_data_scaled[, cluster := fit$cluster]
+aggregation <- box_data_scaled[, .(counts = .N), by = .(cluster, player)]
 aggregation_subset <- aggregation[player %in% top_players[['PLAYER']],]
 top_players_aggregation <- merge(aggregation_subset, top_players, 
 								 by.x = 'player', by.y = 'PLAYER')
@@ -232,6 +233,32 @@ normalized <- team_cluster_wide[, c( .(TEAM = TEAM), lapply(.SD, function(x) {
 }) ), .SDcols = 2:ncol(team_cluster_wide)]
 
 normalized
+
+
+# --------------------------------------------------------------------------------------
+# players recommendation
+# nearest players for each players, sai like it a lot !!!!!!!!!!!!!!!!!!
+
+# aggregate player performance, note that aggregating by
+# mean or median gives different result
+box_data_scaled[, player := player]
+aggregated_performance <- box_data_scaled[, lapply(.SD, median), by = player]
+
+player <- aggregated_performance[['player']]
+aggregated_performance[, player := NULL]
+X <- as.matrix(aggregated_performance)
+X_normed <- X / rowSums(X)
+
+library(FNN)
+knn_result <- FNN::get.knn(X_normed, k = 10)
+
+query <- which(player == 'Stephen Curry')
+neighbors_index <- knn_result$nn.index[query,]
+player[neighbors_index]
+
+query <- which(player == 'Klay Thompson')
+neighbors_index <- knn_result$nn.index[query,]
+player[neighbors_index]
 
 
 # -----------------------------------------------------------------------------
