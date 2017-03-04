@@ -1,8 +1,9 @@
+#install.packages("lsa")
 library(lsa)
 library(caret)
 library(ggplot2)
 library(data.table)
-setwd('/Users/ethen/Desktop/northwestern/winter/MSIA 421 Data Mining/sports')
+setwd('/Users/ethen/sports/presentation')
 box_data <- fread('box2015.csv')
 
 # --------------------------------------------------------------------------------------
@@ -136,7 +137,7 @@ plot(fit)
 
 
 # --------------------------------------------------------------------------------------
-# analysis
+# analysis (entropy)
 
 # put the player names and cluster assignment to each row 
 # aggregate players to each cluster
@@ -234,6 +235,72 @@ normalized <- team_cluster_wide[, c( .(TEAM = TEAM), lapply(.SD, function(x) {
 
 normalized
 
+#-----------------------Arindam and Annie's function!!!!!!!!
+team_div = function(distance, players7){
+  #similarity = lsa::cosine(t(normalized_scaled))
+  #angles = acos(similarity)*180/pi
+  #angles
+  indices = which(player %in% players7)
+  angle = acos(distance[indices, indices]) * 180 / pi
+  below90 = 0
+  belowcount = 0
+  above90 = 0
+  abovecount = 0
+  for(i in 2:nrow(angle)){
+    for(j in 1:(i-1)){
+      if(angle[i,j] < 70){
+        below90 = below90 + angle[i,j]
+        belowcount = belowcount + 1  
+      }
+      if(angle[i,j] >= 70){
+        above90 = above90 + angle[i,j]
+        abovecount = abovecount + 1
+      }
+    }
+  }
+  print(angle)
+  below90 = below90/belowcount
+  above90 = above90/abovecount
+  
+  stats = data.frame(b_angle = below90, b_prop = belowcount/21, a_angle = above90, a_prop = abovecount/21)
+  return(stats)
+}
+
+ATL = top_players[1:7,][['PLAYER']]
+ATL_div = team_div(distance, ATL)
+ATL_div
+
+teams = unique(top_players[["TEAM"]])
+player_sim = data.frame()
+for(team in teams){
+  pNames = top_players[TEAM == team][['PLAYER']]
+  temp = team_div(distance, pNames)
+  player_sim = rbind(player_sim, temp[,1:2])
+}
+
+row.names(player_sim) = teams
+
+player_sim$Team <- rownames(player_sim)
+
+
+library(ggrepel)
+player_sim <- data.table(player_sim)
+team_wins <- fread('teamwins.csv')
+exclude <- c('Losses', 'W/L%')
+team_wins[, (exclude) := NULL]
+merged <- merge(team_wins, player_sim)[order(-Wins)]
+labels <- c( rep('top', 10), rep('middle', 10), rep('bottom', 10) )
+merged[, labels := as.factor(labels)]
+
+values <- c("#FF3333", "yellow", "#00FF00")
+plot <- ggplot(merged, aes(b_angle, b_prop, fill = labels, label = Team)) +
+		geom_point() + theme_bw() + 
+		scale_fill_manual(values = values) +
+		geom_label_repel() +
+		labs(x = 'Degree of Dissimilarity', 
+			 y = 'Proportion of Players', 
+			 title = 'Team Diversity')
+ggsave('plot.png', plot, width = 30, height = 20, units = 'cm')
 
 # --------------------------------------------------------------------------------------
 # players recommendation
