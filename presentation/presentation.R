@@ -193,7 +193,9 @@ server <- function(input, output) {
         result <- merge(result, position)[order(-score),]
         result <- result[2:nrow(result), ]
         return(result)
-    })
+
+    # options: display 10 rows per page
+    }, options = list(pageLength = 10))
 }
 
 shinyApp(ui, server)
