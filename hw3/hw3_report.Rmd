@@ -1,0 +1,219 @@
+---
+title: "Data Mining HW 3"
+author: "Ethen Liu, Sai Haran, Sophia Hoffman, Annie Didier, Arindam Bhattacharya"
+date: "January 23, 2017"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Question 1
+
+a)
+```{r}
+X = matrix(c(1,3,5,0,1, 2,4,4,2,3, 3,5,3,4,5), nrow=5)
+x_tran_x = t(X) %*% X
+x_x_tran = X %*% t(X)
+x_tran_x
+x_x_tran
+```
+
+b)
+```{r}
+ei_x_tran_x = eigen(x_tran_x)
+ei_x_x_tran = eigen(x_x_tran)
+ei_x_tran_x
+ei_x_x_tran
+```
+
+c)
+```{r}
+A = ei_x_tran_x$vectors%*%diag(ei_x_tran_x$values)%*% t(ei_x_tran_x$vectors)
+A
+```
+The output is the same as 2a. 
+
+d)
+```{r}
+svd_x = svd(X)
+#Compare to b
+svd_x$v
+ei_x_tran_x$vectors
+svd_x$u
+ei_x_x_tran$vectors
+(svd_x$d)^2
+(ei_x_tran_x$values)
+ei_x_x_tran$values
+```
+We can see that V gives the eigenvectors of X'X and that the first two columns of U correspond to the first two eigenvectors of XX' since the rank of X is 2.  
+
+e)
+```{r}
+ULV = svd_x$u %*% diag(svd_x$d) %*% t(svd_x$v)
+ULV
+X
+```
+
+f)
+```{r}
+#set the third value to 0 since X has rank 2
+svd_x_rank2 = svd_x$d[1:2] 
+#set the smallest eigenvalue to 0 to do the 1-d projection
+svd_x_oned = svd_x$d
+svd_x_oned[2:3] = 0
+svd_u_one = svd_x$u
+svd_u_one[,2:3] = 0
+svd_v_one = svd_x$v
+svd_v_one[,2:3] = 0
+xhat = svd_u_one %*% diag(svd_x_oned) %*% t(svd_v_one)
+xhat
+```
+xhat is very close to x, so the 1D estimate is a good approximation. 
+
+g)
+```{r}
+ssxhat = sum(xhat^2)
+ssxhat
+svd_x$d[1]^2
+```
+The square of the Frobenius norm, or one dimensional variance, of xhat is the same as the square of the first singular value. 
+
+h)
+```{r}
+SSE = sum((X-xhat)^2)
+SSE
+svd_x$d[2] ^ 2
+```
+
+The answer is equal to the square of the $(k + 1)^{st}$ singular value, where k is the number of the top k singular value we chose to compute the Xhat approximation. In this particular example, it is equal to the square of the second largest singular value, which we set to 0 to obtain the one-dimensional approximation.
+
+i) 
+```{r}
+energy = svd_x_oned^2/ (sum(svd_x$d^2))
+energy
+```
+
+# Question 2
+
+```{r, results='hide'}
+
+library(data.table)
+#setwd("/Users/ethen/Desktop/northwestern/winter/MSIA 421 Data Mining/hw3")
+theater <- fread('theater.csv')
+theater <- theater[ , -c(3, 5, 7, 10), with = FALSE ]
+
+# the theater subset data will be used in question e
+theater_subset <- theater[ , .(dinner, play) ]
+theater[ , c('dinner', 'play', 'age', 'educ', 'income', 'cnty') := NULL ]
+
+```
+
+a)
+```{r, message=FALSE, warning=FALSE}
+alpha_theater1 <- psych::alpha(theater, check.keys = TRUE)
+alpha_theater1
+```
+
+b)
+```{r}
+pca1 <- prcomp(theater)
+pca1$sdev
+```
+
+4 eigenvalues are greater than 1.
+
+```{r}
+pca1$rotation
+```
+
+noteduc, dislike have smaller first loading vectors when it comes to magnitude.
+
+c)
+
+```{r}
+
+# after removing noteduc and dislike, 
+# the drop of reliability remains the same for
+# every single variable that we dropped
+theater[ , c('dislike', 'noteduc') := NULL ]
+alpha_theater2 <- psych::alpha(theater, check.keys = TRUE)
+alpha_theater2
+
+# and the explained ratio of the first loading vector is larger
+pca2 <- prcomp(theater)
+summary(pca1)
+summary(pca2)
+
+```
+
+d)
+
+```{r, results='hide'}
+# reverse code the reversed coded columns
+reverse_col <- c('irritate', 'bad', 'cannotappreciate')
+max_score <- 7
+theater[ , (reverse_col) := lapply(.SD, function(col) {
+	(max_score + 1) - col
+}), .SDcols = reverse_col ]
+
+# compute attitude variable
+theater_subset[ , attitude := rowSums(theater) / ncol(theater) ]
+```
+
+```{r}
+theater_subset 
+```
+
+
+e)
+```{r, results='hide'}
+# there are NA values in theater subset, we tried dropping the
+# NA values and setting the NA values to 0 and obtained similar result
+theater_subset1 <- theater_subset[ complete.cases(theater_subset), ]
+theater_subset1[ , new_feature := log(dinner + play + 1) ]
+
+theater_subset[ is.na(dinner), dinner := 0 ]
+theater_subset[ is.na(play), play := 0 ]
+theater_subset[ , new_feature := log(dinner + play + 1) ]
+```
+
+```{r}
+with( theater_subset1, cor(new_feature, attitude, method = 'pearson') )
+with( theater_subset, cor(new_feature, attitude, method = 'pearson') )
+```
+
+
+f)
+
+The sum of dinner and play is not within the normal range of 1 to 7, by taking the log, we transform it to a narrower and more comparable range.
+
+# Question 3
+
+```{r}
+music <- read.csv("music.csv")
+retain_cols <- c('V28', 'V29', 'V30', 'V31', 'V32', 'V33', 
+                 'V34', 'V43', 'V46', 'V47', 'V50', 'V52')
+music <- music[, retain_cols]
+```
+
+a)
+```{r}
+alpha_music <- psych::alpha(music)
+alpha_music
+```
+
+b)
+```{r}
+pca <- prcomp(music)
+pca$sdev
+```
+
+3 eigenvalues are greater than 1.
+
+c)
+
+A person's similarity of taste in music with friends or a person's willingless to share his/her personal taste in music.
+
+
